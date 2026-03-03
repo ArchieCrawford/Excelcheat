@@ -1,130 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Excel to Word Generator</title>
-  <style>
-    :root {
-      --bg: #0f172a;
-      --card: #111827;
-      --text: #e5e7eb;
-      --muted: #94a3b8;
-      --accent: #22c55e;
-      --border: #1f2937;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "IBM Plex Sans", "Segoe UI", Tahoma, sans-serif;
-      background: radial-gradient(1200px 600px at 10% -10%, #1f2937, transparent),
-                  radial-gradient(1200px 600px at 100% 0%, #0b1324, transparent),
-                  var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-    }
-    .card {
-      width: 100%;
-      max-width: 520px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-    }
-    h1 {
-      margin: 0 0 6px;
-      font-size: 22px;
-    }
-    p {
-      margin: 0 0 16px;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.4;
-    }
-    .row {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-    input[type="file"],
-    input[type="text"],
-    select {
-      width: 100%;
-      padding: 10px;
-      background: #0b1220;
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 10px;
-    }
-    label {
-      display: block;
-      margin-top: 12px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-    button {
-      background: var(--accent);
-      color: #06270f;
-      border: none;
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .status {
-      margin-top: 12px;
-      font-size: 13px;
-      color: var(--muted);
-      min-height: 18px;
-    }
-    .hint {
-      font-size: 12px;
-      color: #64748b;
-      margin-top: 10px;
-    }
-    code {
-      background: #0b1220;
-      padding: 2px 6px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-    }
-  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <div class="card">
-    <h1>Excel to Word Generator</h1>
-    <p>Select your Excel file and generate the Word report. Nothing is stored.</p>
+<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-900 text-slate-100">
+  <div class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-xl rounded-2xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
+      <p class="text-xs uppercase tracking-[0.25em] text-emerald-300">Hulk the Great made this possible</p>
+      <h1 class="mt-3 text-3xl font-semibold">Excel → Word Generator</h1>
+      <p class="mt-2 text-sm text-slate-300">
+        Upload your Excel file and download a Word document. Nothing is stored.
+      </p>
 
-    <label for="fileInput">Excel file</label>
-    <input type="file" id="fileInput" accept=".xlsx,.xls" />
+      <div class="mt-6">
+        <label for="fileInput" class="block text-sm text-slate-200">Excel file</label>
+        <input
+          id="fileInput"
+          type="file"
+          accept=".xlsx,.xls"
+          class="mt-2 w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+        />
+      </div>
 
-    <label for="templateInput">Optional Word template (.docx)</label>
-    <input type="file" id="templateInput" accept=".docx" />
+      <button
+        id="generateBtn"
+        class="mt-6 w-full rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+        onclick="upload()"
+      >
+        Generate Word Doc
+      </button>
 
-    <label for="markSymbol">Mark for Received</label>
-    <select id="markSymbol">
-      <option value="X">X</option>
-      <option value="&#10003;">&#10003; (check)</option>
-      <option value="&#10004;">&#10004; (bold check)</option>
-    </select>
-
-    <label for="notEligibleText">Text for Not Eligible (leave blank for empty)</label>
-    <input type="text" id="notEligibleText" value="Not Eligible" />
-    <div class="row">
-      <button id="generateBtn" onclick="upload()">Generate Word Document</button>
+      <p id="status" class="mt-4 text-sm text-slate-300"></p>
+      <p class="mt-2 text-xs text-slate-400">Endpoint: <span id="apiHint" class="text-slate-200">YOUR_API_URL/generate-lines</span></p>
     </div>
-    <div class="status" id="status"></div>
-    <div class="hint">API endpoint: <code id="apiHint">YOUR_API_URL/generate</code></div>
   </div>
 
   <script>
@@ -133,17 +44,14 @@
     const statusEl = document.getElementById("status");
     const btn = document.getElementById("generateBtn");
     const apiHint = document.getElementById("apiHint");
-    apiHint.textContent = `${API_BASE}/generate`;
+    apiHint.textContent = `${API_BASE}/generate-lines`;
 
     async function upload() {
       const fileInput = document.getElementById("fileInput");
       const file = fileInput.files[0];
-      const templateFile = document.getElementById("templateInput").files[0];
-      const markSymbol = document.getElementById("markSymbol").value;
-      const notEligibleText = document.getElementById("notEligibleText").value;
 
       if (!file) {
-        alert("Please select a file.");
+        alert("Please select an Excel file.");
         return;
       }
 
@@ -152,14 +60,9 @@
 
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("mark_symbol", markSymbol);
-      formData.append("not_eligible_text", notEligibleText);
-      if (templateFile) {
-        formData.append("template", templateFile);
-      }
 
       try {
-        const response = await fetch(`${API_BASE}/generate`, {
+        const response = await fetch(`${API_BASE}/generate-lines`, {
           method: "POST",
           body: formData
         });
@@ -172,10 +75,10 @@
         const blob = await response.blob();
         const link = document.createElement("a");
         link.href = window.URL.createObjectURL(blob);
-        link.download = "Received_Plans_Report.docx";
+        link.download = "Group_Status_Report.docx";
         link.click();
 
-        statusEl.textContent = "Done. Your file should be downloading.";
+        statusEl.textContent = "Done. Your Word document should be downloading.";
       } catch (err) {
         statusEl.textContent = `Error: ${err.message}`;
       } finally {

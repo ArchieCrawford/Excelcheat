@@ -18,6 +18,8 @@ app.add_middleware(
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATE_PATH = BASE_DIR / "template.docx"
 RECEIVED_MARK = "X"
+SHOW_VALUES = {"received": "Received", "declined": "Declined", "not eligible": "Not Eligible"}
+BLANK_VALUES = {"outstanding": ""}
 
 
 def normalize(v):
@@ -91,8 +93,7 @@ async def generate(
             )
         template_bytes = TEMPLATE_PATH.read_bytes()
     data = await file.read()
-    wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
-    ws = wb.active
+    ws = load_sheet(data)
 
     payer_letters = [normalize(ws.cell(2, c).value) for c in range(2, 10)]
     payer_labels = [f"Payer {x}" for x in payer_letters]
@@ -134,4 +135,113 @@ async def generate(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": "attachment; filename=Received_Plans_Report.docx"},
+    )
+
+
+@app.post("/generate-table")
+async def generate_table(file: UploadFile = File(...)):
+    data = await file.read()
+    ws = load_sheet(data)
+    payer_headers, rows = read_rows(ws)
+
+    doc = Document()
+    doc.add_heading("Group Status Report", level=1)
+
+    table = doc.add_table(rows=len(rows) + 1, cols=len(payer_headers) + 1)
+    table.style = "Table Grid"
+
+    table.cell(0, 0).text = "Group"
+    for j, h in enumerate(payer_headers, start=1):
+        table.cell(0, j).text = h
+
+    for i, (group, statuses) in enumerate(rows, start=1):
+        table.cell(i, 0).text = group
+        for j, v in enumerate(statuses, start=1):
+            table.cell(i, j).text = display_status(v)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": "attachment; filename=Group_Status_Report.docx"},
+    )
+def display_status(v):
+    s = normalize(v).lower()
+    if s in SHOW_VALUES:
+        return SHOW_VALUES[s]
+    if s in BLANK_VALUES:
+        return BLANK_VALUES[s]
+    return "" if s == "" else normalize(v)
+
+
+def load_sheet(data):
+    wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
+    return wb.active
+
+
+def read_rows(ws):
+    payer_headers = []
+    for c in range(2, 10):
+        h = normalize(ws.cell(2, c).value)
+        payer_headers.append(h if h else f"Col{c}")
+
+    rows = []
+    for r in range(4, ws.max_row + 1):
+        group = normalize(ws.cell(r, 1).value)
+        if not group:
+            continue
+        statuses = [ws.cell(r, c).value for c in range(2, 10)]
+        rows.append((group, statuses))
+
+    return payer_headers, rows
+
+
+def payer_label_from_header(header, fallback_letter):
+    h = normalize(header)
+    return h if h else f"Payer {fallback_letter}"
+
+
+@app.post("/generate-lines")
+async def generate_lines(file: UploadFile = File(...)):
+    data = await file.read()
+    ws = load_sheet(data)
+
+    letters = "ABCDEFGH"
+    payer_labels = []
+    for i, c in enumerate(range(2, 10)):
+        header = ws.cell(2, c).value
+        payer_labels.append(payer_label_from_header(header, letters[i]))
+
+    doc = Document()
+    first_group = True
+
+    for r in range(4, ws.max_row + 1):
+        group = normalize(ws.cell(r, 1).value)
+        if not group:
+            continue
+
+        if not first_group:
+            doc.add_page_break()
+        first_group = False
+
+        doc.add_paragraph(f"Group Name {group}")
+        doc.add_paragraph("Received Plans")
+
+        statuses = [ws.cell(r, c).value for c in range(2, 10)]
+        for label, status in zip(payer_labels, statuses):
+            value = normalize(status)
+            line = f"{label} {value}".rstrip()
+            doc.add_paragraph(line)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": "attachment; filename=Group_Status_Report.docx"},
     )

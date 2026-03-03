@@ -1,54 +1,53 @@
-from pathlib import Path
 import openpyxl
 from docx import Document
 
-EXCEL_PATH = "Test.xlsx"
-OUTPUT_DOCX = "Group_Status_Report.docx"
-
-SHOW_VALUES = {"received": "Received", "declined": "Declined", "not eligible": "Not Eligible"}
-BLANK_VALUES = {"outstanding": ""}
+EXCEL_PATH = r"C:\Users\AceGr\Desktop\EdProject\Test.xlsx"
+OUTPUT_DOCX = r"C:\Users\AceGr\Downloads\Group_Status_Report.docx"
 
 def norm(v):
     return "" if v is None else str(v).strip()
 
-def display_status(v):
-    s = norm(v).lower()
-    if s in SHOW_VALUES:
-        return SHOW_VALUES[s]
-    if s in BLANK_VALUES:
-        return BLANK_VALUES[s]
-    return "" if s == "" else norm(v)
+
+def display_value(status):
+    return norm(status)
+
+
+def payer_label(header, fallback_letter):
+    h = norm(header)
+    if h:
+        return h
+    return f"Payer {fallback_letter}"
+
 
 wb = openpyxl.load_workbook(EXCEL_PATH, data_only=True)
 ws = wb.active
 
-payer_headers = []
-for c in range(2, 10):
-    h = norm(ws.cell(2, c).value)
-    payer_headers.append(h if h else f"Col{c}")
+payer_labels = []
+letters = "ABCDEFGH"
+for i, c in enumerate(range(2, 10)):
+    header = ws.cell(2, c).value
+    payer_labels.append(payer_label(header, letters[i]))
 
-rows = []
+doc = Document()
+
+first_group = True
 for r in range(4, ws.max_row + 1):
     group = norm(ws.cell(r, 1).value)
     if not group:
         continue
+
+    if not first_group:
+        doc.add_page_break()
+    first_group = False
+
+    doc.add_paragraph(f"Group Name {group}")
+    doc.add_paragraph("Received Plans")
+
     statuses = [ws.cell(r, c).value for c in range(2, 10)]
-    rows.append((group, statuses))
-
-doc = Document()
-doc.add_heading("Group Status Report", level=1)
-
-table = doc.add_table(rows=len(rows) + 1, cols=len(payer_headers) + 1)
-table.style = "Table Grid"
-
-table.cell(0, 0).text = "Group"
-for j, h in enumerate(payer_headers, start=1):
-    table.cell(0, j).text = h
-
-for i, (group, statuses) in enumerate(rows, start=1):
-    table.cell(i, 0).text = group
-    for j, v in enumerate(statuses, start=1):
-        table.cell(i, j).text = display_status(v)
+    for label, status in zip(payer_labels, statuses):
+        value = display_value(status)
+        line = f"{label} {value}".rstrip()
+        doc.add_paragraph(line)
 
 doc.save(OUTPUT_DOCX)
 print(f"Saved: {OUTPUT_DOCX}")
