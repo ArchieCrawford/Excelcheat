@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from copy import deepcopy
 import io
 import openpyxl
 from docx import Document
@@ -30,10 +31,31 @@ def mark_for_status(status):
     return ""
 
 
+def iter_paragraphs_in_table(table):
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                yield p
+            for nested in cell.tables:
+                yield from iter_paragraphs_in_table(nested)
+
+
+def iter_all_paragraphs(doc):
+    for p in doc.paragraphs:
+        yield p
+    for table in doc.tables:
+        yield from iter_paragraphs_in_table(table)
+
+
 def fill_template(group_name, payer_labels, statuses):
     doc = Document(TEMPLATE_PATH)
+    label_to_status = {}
+    for i, label in enumerate(payer_labels):
+        if label.strip() == "Payer":
+            continue
+        label_to_status[label] = mark_for_status(statuses[i])
 
-    for p in doc.paragraphs:
+    for p in iter_all_paragraphs(doc):
         t = p.text.strip()
 
         if t.startswith("Group Name"):
@@ -42,9 +64,8 @@ def fill_template(group_name, payer_labels, statuses):
 
         if t.startswith("Payer "):
             label = t.split("\t", 1)[0].strip()
-            if label in payer_labels:
-                idx = payer_labels.index(label)
-                p.text = f"{label}\t{mark_for_status(statuses[idx])}"
+            if label in label_to_status:
+                p.text = f"{label}\t{label_to_status[label]}"
 
     return doc
 
@@ -58,7 +79,7 @@ async def generate(file: UploadFile = File(...)):
     payer_letters = [normalize(ws.cell(2, c).value) for c in range(2, 10)]
     payer_labels = [f"Payer {x}" for x in payer_letters]
 
-    out = Document()
+    out = None
 
     for r in range(4, ws.max_row + 1):
         group_name = normalize(ws.cell(r, 1).value)
@@ -68,9 +89,17 @@ async def generate(file: UploadFile = File(...)):
         statuses = [ws.cell(r, c).value for c in range(2, 10)]
         temp = fill_template(group_name, payer_labels, statuses)
 
-        for p in temp.paragraphs:
-            out.add_paragraph(p.text)
-        out.add_page_break()
+        if out is None:
+            out = temp
+        else:
+            out.add_page_break()
+            for element in temp.element.body:
+                if element.tag.endswith("sectPr"):
+                    continue
+                out.element.body.append(deepcopy(element))
+
+    if out is None:
+        out = Document()
 
     buf = io.BytesIO()
     out.save(buf)
