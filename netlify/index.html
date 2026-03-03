@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Excel to Word Generator</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #22c55e;
+      --border: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1f2937, transparent),
+                  radial-gradient(1200px 600px at 100% 0%, #0b1324, transparent),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+    }
+    p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      background: #0b1220;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+    }
+    button {
+      background: var(--accent);
+      color: #06270f;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--muted);
+      min-height: 18px;
+    }
+    .hint {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 10px;
+    }
+    code {
+      background: #0b1220;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Excel to Word Generator</h1>
+    <p>Select your Excel file and generate the Word report. Nothing is stored.</p>
+
+    <input type="file" id="fileInput" accept=".xlsx,.xls" />
+    <div class="row">
+      <button id="generateBtn" onclick="upload()">Generate Word Document</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="hint">API endpoint: <code id="apiHint">YOUR_API_URL/generate</code></div>
+  </div>
+
+  <script>
+    const API_BASE = "YOUR_API_URL"; // Example: https://api.yourdomain.com
+
+    const statusEl = document.getElementById("status");
+    const btn = document.getElementById("generateBtn");
+    const apiHint = document.getElementById("apiHint");
+    apiHint.textContent = `${API_BASE}/generate`;
+
+    async function upload() {
+      const fileInput = document.getElementById("fileInput");
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert("Please select a file.");
+        return;
+      }
+
+      btn.disabled = true;
+      statusEl.textContent = "Uploading...";
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const response = await fetch(`${API_BASE}/generate`, {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Request failed (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        const link = document.createElement("a");
+        link.href = window.URL.createObjectURL(blob);
+        link.download = "Received_Plans_Report.docx";
+        link.click();
+
+        statusEl.textContent = "Done. Your file should be downloading.";
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
