@@ -1,10 +1,11 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from copy import deepcopy
 import io
 import openpyxl
 from docx import Document
+from pathlib import Path
 
 app = FastAPI()
 app.add_middleware(
@@ -14,7 +15,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TEMPLATE_PATH = "template.docx"
+BASE_DIR = Path(__file__).resolve().parent
+TEMPLATE_PATH = BASE_DIR / "template.docx"
 RECEIVED_MARK = "X"
 
 
@@ -22,12 +24,12 @@ def normalize(v):
     return "" if v is None else str(v).strip()
 
 
-def mark_for_status(status):
+def mark_for_status(status, received_mark, not_eligible_text):
     s = normalize(status).lower()
     if s == "received":
-        return RECEIVED_MARK
+        return received_mark
     if s == "not eligible":
-        return "Not Eligible"
+        return not_eligible_text
     return ""
 
 
@@ -47,13 +49,13 @@ def iter_all_paragraphs(doc):
         yield from iter_paragraphs_in_table(table)
 
 
-def fill_template(group_name, payer_labels, statuses):
-    doc = Document(TEMPLATE_PATH)
+def fill_template(group_name, payer_labels, statuses, template_bytes, received_mark, not_eligible_text):
+    doc = Document(io.BytesIO(template_bytes))
     label_to_status = {}
     for i, label in enumerate(payer_labels):
         if label.strip() == "Payer":
             continue
-        label_to_status[label] = mark_for_status(statuses[i])
+        label_to_status[label] = mark_for_status(statuses[i], received_mark, not_eligible_text)
 
     for p in iter_all_paragraphs(doc):
         t = p.text.strip()
@@ -71,7 +73,23 @@ def fill_template(group_name, payer_labels, statuses):
 
 
 @app.post("/generate")
-async def generate(file: UploadFile = File(...)):
+async def generate(
+    file: UploadFile = File(...),
+    template: UploadFile | None = File(None),
+    mark_symbol: str = Form(RECEIVED_MARK),
+    not_eligible_text: str = Form("Not Eligible"),
+):
+    if template is not None:
+        template_bytes = await template.read()
+        if not template_bytes:
+            raise HTTPException(status_code=400, detail="Uploaded template is empty")
+    else:
+        if not TEMPLATE_PATH.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"template.docx not found at {TEMPLATE_PATH}",
+            )
+        template_bytes = TEMPLATE_PATH.read_bytes()
     data = await file.read()
     wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
     ws = wb.active
@@ -87,7 +105,14 @@ async def generate(file: UploadFile = File(...)):
             continue
 
         statuses = [ws.cell(r, c).value for c in range(2, 10)]
-        temp = fill_template(group_name, payer_labels, statuses)
+        temp = fill_template(
+            group_name,
+            payer_labels,
+            statuses,
+            template_bytes,
+            mark_symbol or RECEIVED_MARK,
+            not_eligible_text,
+        )
 
         if out is None:
             out = temp

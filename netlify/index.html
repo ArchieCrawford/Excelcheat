@@ -52,13 +52,21 @@
       margin-top: 12px;
       flex-wrap: wrap;
     }
-    input[type="file"] {
+    input[type="file"],
+    input[type="text"],
+    select {
       width: 100%;
       padding: 10px;
       background: #0b1220;
       border: 1px solid var(--border);
       color: var(--text);
       border-radius: 10px;
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted);
     }
     button {
       background: var(--accent);
@@ -97,7 +105,21 @@
     <h1>Excel to Word Generator</h1>
     <p>Select your Excel file and generate the Word report. Nothing is stored.</p>
 
+    <label for="fileInput">Excel file</label>
     <input type="file" id="fileInput" accept=".xlsx,.xls" />
+
+    <label for="templateInput">Optional Word template (.docx)</label>
+    <input type="file" id="templateInput" accept=".docx" />
+
+    <label for="markSymbol">Mark for Received</label>
+    <select id="markSymbol">
+      <option value="X">X</option>
+      <option value="&#10003;">&#10003; (check)</option>
+      <option value="&#10004;">&#10004; (bold check)</option>
+    </select>
+
+    <label for="notEligibleText">Text for Not Eligible (leave blank for empty)</label>
+    <input type="text" id="notEligibleText" value="Not Eligible" />
     <div class="row">
       <button id="generateBtn" onclick="upload()">Generate Word Document</button>
     </div>
@@ -116,6 +138,9 @@
     async function upload() {
       const fileInput = document.getElementById("fileInput");
       const file = fileInput.files[0];
+      const templateFile = document.getElementById("templateInput").files[0];
+      const markSymbol = document.getElementById("markSymbol").value;
+      const notEligibleText = document.getElementById("notEligibleText").value;
 
       if (!file) {
         alert("Please select a file.");
@@ -127,6 +152,11 @@
 
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("mark_symbol", markSymbol);
+      formData.append("not_eligible_text", notEligibleText);
+      if (templateFile) {
+        formData.append("template", templateFile);
+      }
 
       try {
         const response = await fetch(`${API_BASE}/generate`, {
